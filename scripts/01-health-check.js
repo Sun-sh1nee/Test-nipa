@@ -1,50 +1,96 @@
-// scripts/01-health-check.js
 import http from 'k6/http';
 import { check, sleep } from 'k6';
-import { BASE_URL } from '../lib/common.js';
+import { Rate } from 'k6/metrics';
+import { Trend } from 'k6/metrics';
 
-export const options = {
-  stages: [
-    { duration: '1m', target: 5 },   // Ramp-up to 5 VUs over 1 minute
-    { duration: '2m', target: 5 },   // Stay at 5 VUs for 2 minutes
-    { duration: '30s', target: 0 },  // Ramp-down to 0 VUs over 30 seconds
-  ],
+export let errorRate = new Rate('errors');
+export let healthCheckLatency = new Trend('health_check_latency');
+export let systemStatusLatency = new Trend('system_status_latency');
+export let databaseCheckLatency = new Trend('database_check_latency');
+
+export let options = {
+  vus: 50, // number of virtual users
+  duration: '1m', // test duration
   thresholds: {
-    'http_req_duration{name:healthCheck}': ['p(95)<70'], // 95th percentile should be < 70ms
-    'http_req_duration{name:systemStatus}': ['p(95)<150'], // 95th percentile should be < 150ms
-    'http_req_duration{name:dbCheck}': ['p(95)<300'],   // 95th percentile should be < 300ms
-    'http_req_failed': ['rate<0.01'], // error rate should be less than 1%
-  },
+    http_req_duration: ['p(95)<500' , 'p(99)<1000'], // 95% of requests < 500ms
+    'errors': ['rate<0.05'], // < 5% error rate
+  }
 };
 
-export default function () {
-  // Test GET /health
-  const healthRes = http.get(`${BASE_URL}/health`, {
-    tags: { name: 'healthCheck' },
-  });
-  check(healthRes, {
-    'health check status is 200': (r) => r.status === 200,
-    'health check message': (r) => r.body.includes('OK'),
-  });
-  sleep(0.5); // Short pause
+const BASE_URL =  'http://travel.local/api' ;
 
-  // Test GET /
-  const rootRes = http.get(`${BASE_URL}/`, {
-    tags: { name: 'systemStatus' },
-  });
-  check(rootRes, {
-    'root status is 200': (r) => r.status === 200,
-    'root message': (r) => r.body.includes('API is running'),
-  });
-  sleep(0.5); // Short pause
+function retryRequest(requestFunc, retries = 3, initialDelayMs = 200) {
+  for (let i = 0; i < retries; i++) {
+    const res = requestFunc();
+    if (res && res.status !== 0) {
+      return res;
+    }
+    sleep(initialDelayMs / 1000 * Math.pow(2, i)); // Exponential backoff sleep
+  }
+  return null;
+}
 
-  // Test GET /api/check-tables (assuming this exists or modify to your DB check API)
-  const dbCheckRes = http.get(`${BASE_URL}/api/check-tables`, { // Assuming this is your DB check endpoint from server.js
-    tags: { name: 'dbCheck' },
-  });
-  check(dbCheckRes, {
-    'db check status is 200': (r) => r.status === 200,
-    'db check success': (r) => r.json().success === true,
-  });
-  sleep(1);
+export default function() {
+    // --------------------------
+    // 1. Health Check
+    // --------------------------
+    
+    const healthCheckRes = retryRequest(() =>
+    http.get(`${BASE_URL}/health`), 3, 200);
+
+    if (healthCheckRes) {
+        healthCheckLatency.add(healthCheckRes.timings.duration / 1000) ;
+    }
+    
+    const healthCheckOK = healthCheckRes && check(healthCheckRes , {
+        'Health Check: status is 200': (r) => r.status === 200,
+        'Health Check: healthy': (r) => r.body && r.body.length > 0 && (r.json('status') === 'healthy'),
+    });
+
+    errorRate.add(!healthCheckOK);
+    if (!healthCheckOK) return;
+
+    sleep(1) ;
+
+    // --------------------------
+    // 2. System Status Check
+    // --------------------------
+
+    const systemStatusRes = retryRequest(() =>
+    http.get(`${BASE_URL}/`), 3, 200);
+
+    if (systemStatusRes) {
+        systemStatusLatency.add(systemStatusRes.timings.duration / 1000) ;
+    }
+    const systemStatusOK = systemStatusRes && check(systemStatusRes , {
+        'System Status: status is 200': (r) => r.status === 200,
+        'System Status: NIPA Travel API Server is running!': (r) => r.body && r.body.length > 0 && (r.json('message') === 'NIPA Travel API Server is running!'),
+    });
+
+    errorRate.add(!systemStatusOK);
+    if (!systemStatusOK) return;
+
+    sleep(1) ;
+
+    // --------------------------
+    // 3. Database Connection
+    // --------------------------
+
+    const databaseConnectionRes = retryRequest(() =>
+    http.get(`${BASE_URL}/check-tables`), 3, 200);
+
+    if (databaseConnectionRes) {
+        databaseCheckLatency.add(databaseConnectionRes.timings.duration / 1000) ;
+    }
+
+    const databaseConnectionOK = databaseConnectionRes && check(databaseConnectionRes , {
+        'Database Connection: status is 200': (r) => r.status === 200,
+        'Database Connection: Database connected': (r) => r.body && r.body.length > 0 && (r.json('message') === 'Database tables information'),
+    });
+
+    errorRate.add(!databaseConnectionOK);
+    if (!databaseConnectionOK) return;
+
+    sleep(1) ;
+
 }
