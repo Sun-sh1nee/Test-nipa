@@ -83,7 +83,11 @@ export default function () {
   });
   errorRate.add(!createOK);
   sleep(0.5);
-
+  
+  // Get Booking ID
+  const bookingID = createRes ? createRes.json('data.booking.id') : null;
+  errorRate.add(!bookingID)
+	
   // Delete Booking after create
   const delRes = http.del(`${BASE_URL}/bookings/${bookingID}`, null, { headers: authHeaders });
   const deleteOK = check(delRes, { 'delete: 200': (r) => r.status === 200 });
