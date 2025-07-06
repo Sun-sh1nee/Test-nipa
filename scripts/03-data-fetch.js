@@ -41,7 +41,10 @@ export default function () {
   fetchDuration.add(res.timings.duration);
   const dataOK = check(res, {
     'Fetch 200': (r) => r.status === 200,
-    'Records ≥ 1000': (r) => r.body && r.body.length > 0 && r.json('total_bookings') >= 1000,
+    'Total bookings ≥ 1000': (r) => {
+      const total = r.json('data.total_bookings');
+      return total !== undefined && total >= 1000;
+    },
   });
   errorRate.add(!dataOK);
   sleep(1);

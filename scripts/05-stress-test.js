@@ -84,12 +84,8 @@ export default function () {
   errorRate.add(!createOK);
   sleep(0.5);
 
-  // Get Booking List
-  const getRes = retryRequest(() => http.get(`${BASE_URL}/bookings`, { headers: authHeaders }));
-  if (getRes) getBookingLatency.add(getRes.timings.duration / 1000);
-  const getOK = getRes && check(getRes, {
-    'get: 200': (r) => r.status === 200,
-  });
-  errorRate.add(!getOK);
-  sleep(0.5);
+  // Delete Booking after create
+  const delRes = http.del(`${BASE_URL}/bookings/${bookingID}`, null, { headers: authHeaders });
+  const deleteOK = check(delRes, { 'delete: 200': (r) => r.status === 200 });
+  errorRate.add(!deleteOK);
 }
