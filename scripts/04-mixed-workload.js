@@ -150,6 +150,16 @@ export default function () {
   errorRate.add(!updateOK);
   sleep(1);
 
+  // Get All
+  const getRes = retryRequest(() => http.get(`${BASE_URL}/bookings`, { headers: authHeaders }));
+
+  if (getRes) getBookingLatency.add(getRes.timings.duration / 1000);
+  const getOK = check(getRes, {
+    'Get Booking: status is 200': (r) => r.status === 200,
+  });
+  errorRate.add(!getOK);
+  sleep(1);
+
   // Get by ID
   const getIDRes = retryRequest(() => http.get(`${BASE_URL}/bookings/${bookingID}`, { headers: authHeaders }));
   if (getIDRes) getBookingIDLatency.add(getIDRes.timings.duration / 1000);

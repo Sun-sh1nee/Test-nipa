@@ -12,11 +12,11 @@ export let getBookingLatency = new Trend('get_booking_latency');
 
 export let options = {
   stages: [
-    { duration: '5m', target: 50 },    // ramp-up to 50 users in 5 min
-    { duration: '5m', target: 100 },   // ramp-up to 100 users in next 5 min
-    { duration: '10m', target: 200 },  // stay at 200 users for 10 min
-    { duration: '5m', target: 100 },   // ramp-down to 100 users
-    { duration: '5m', target: 0 },     // ramp-down to 0
+    { duration: '2m', target: 50 },    // ramp-up to 50 users in 5 min
+    { duration: '2m', target: 100 },   // ramp-up to 100 users in next 5 min
+    { duration: '8m', target: 200 },  // stay at 200 users for 10 min
+    { duration: '2m', target: 100 },   // ramp-down to 100 users
+    { duration: '1m', target: 0 },     // ramp-down to 0
   ],
 };
 
@@ -82,6 +82,14 @@ export default function () {
     'create: 201': (r) => r.status === 201,
   });
   errorRate.add(!createOK);
+  sleep(0.5);
+
+  const getRes = retryRequest(() => http.get(`${BASE_URL}/bookings`, { headers: authHeaders }));
+  if (getRes) getBookingLatency.add(getRes.timings.duration / 1000);
+  const getOK = getRes && check(getRes, {
+    'get: 200': (r) => r.status === 200,
+  });
+  errorRate.add(!getOK);
   sleep(0.5);
   
   // Get Booking ID
