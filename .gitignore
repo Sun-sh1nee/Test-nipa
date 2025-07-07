@@ -1,2 +1,3 @@
 node_modules/
 results/**/_json.json
+!results/**/.gitkeep
