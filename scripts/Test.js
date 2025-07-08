@@ -3,12 +3,12 @@ import { check, sleep } from 'k6';
 
 export let options = {
   stages: [
-    { duration: '1m', target: 50 },    // ramp-up to 50 users in 5 min
-    { duration: '2m', target: 100 },   // ramp-up to 100 users in next 5 min
-    { duration: '2m', target: 100 },   // ramp-down to 100 users
-    { duration: '1m', target: 0 },     // ramp-down to 0
+    { duration: '2m', target: 20 },   // ไต่ขึ้นเป็น 20 users ใน 2 นาทีแรก
+    { duration: '3m', target: 50 },   // ไต่ขึ้นเป็น 50 users ใน 3 นาทีถัดไป
+    { duration: '5m', target: 100 },  // ไต่ขึ้นเป็น 100 users ใน 5 นาทีสุดท้าย
   ],
 };
+
 export default function () {
   let res = http.get('http://nipa.sudlor.me/');
 
@@ -18,4 +18,3 @@ export default function () {
 
   sleep(0.5);
 }
-
