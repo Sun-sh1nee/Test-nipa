@@ -2,8 +2,7 @@
 const axios = require('axios');
 const { faker } = require('@faker-js/faker');
 
-
-const BASE_URL = process.env.BASE_URL || 'http://localhost/api';
+const BASE_URL = 'http://nipa.sudlor.me/api';
 const USER_CREDENTIALS = {
   username: 'admin',
   password: 'password',
@@ -61,6 +60,4 @@ async function main() {
 
 main();
 
-
-// npm install @faker-js/faker axios
 // node generate-bookings.js
