@@ -5,7 +5,7 @@ ROUNDS=${2:-1}  # จำนวนรอบ (default=1 ถ้าไม่ใส�
 
 mkdir -p results/$INGRESS/json
 
-declare -a TESTS=("static-test" "stress-test")
+declare -a TESTS=("stress-test1" "stress-test2")
 
 for (( round=1; round<=ROUNDS; round++ ))
 do
