@@ -9,7 +9,6 @@ from datetime import datetime
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 RESULT_DIR = os.path.join(ROOT_DIR, 'results')
 
-# รับ ingress ที่ต้องการจาก argument เช่น nginx, traefik, all
 VALID_INGRESS = ['nginx', 'traefik', 'haproxy', 'apisix']
 arg = sys.argv[1] if len(sys.argv) > 1 else 'all'
 IMPLEMENTATIONS = VALID_INGRESS if arg == 'all' else [arg]
@@ -18,7 +17,6 @@ if not set(IMPLEMENTATIONS).issubset(set(VALID_INGRESS)):
     print(f"❌ Invalid ingress: {arg}")
     sys.exit(1)
 
-# metric ที่ใช้เป็น latency ได้
 LATENCY_METRICS = ['http_req_duration', 'static_latency']
 
 for impl in IMPLEMENTATIONS:
@@ -37,7 +35,7 @@ for impl in IMPLEMENTATIONS:
         outpath = os.path.join(csv_dir, outname)
 
         latency_data = defaultdict(list)
-        error_count = defaultdict(int)
+        error_sum = defaultdict(float)
         request_count = defaultdict(int)
 
         line_count = 0
@@ -69,8 +67,7 @@ for impl in IMPLEMENTATIONS:
                         latency_data[bucket].append(point['data']['value'])
 
                     if metric == 'errors':
-                        if point['data']['value'] > 0:
-                            error_count[bucket] += 1
+                        error_sum[bucket] += point['data']['value']
 
                     if metric == 'http_reqs':
                         request_count[bucket] += point['data']['value']
@@ -91,9 +88,9 @@ for impl in IMPLEMENTATIONS:
             for bucket in sorted(latency_data.keys()):
                 data = latency_data[bucket]
                 rps = request_count.get(bucket, 0) / 5
-                errors = error_count.get(bucket, 0)
-                total = request_count.get(bucket, 0)
-                error_rate = (errors / total * 100) if total else 0
+                total_reqs = request_count.get(bucket, 0)
+                error_avg = error_sum.get(bucket, 0)
+                error_rate = (error_avg * 100) if total_reqs else 0
 
                 writer.writerow({
                     'time_bucket_sec': datetime.fromtimestamp(bucket).isoformat(),
