@@ -14,7 +14,7 @@ do
   for TEST in "${TESTS[@]}"; do
     echo "▶ Running $TEST .. Ingress: $INGRESS (Round $round)"
     k6 run scripts/$TEST.js --out json=results/$INGRESS/json/${TEST}_json_round${round}_json.json
-    echo "⏳ Waiting 2 minutes before next test..."
+    echo "⏳ Waiting 60 seconds before next test..."
     sleep 60
   done
 

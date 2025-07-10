@@ -1,20 +1,32 @@
-# json_to_csv_batch.py
 import os
 import json
 import csv
+import sys
 from statistics import quantiles
 from collections import defaultdict
 from datetime import datetime
 
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 RESULT_DIR = os.path.join(ROOT_DIR, 'results')
-IMPLEMENTATIONS = ['nginx', 'traefik', 'haproxy', 'apisix']
 
-# make CSV for each file to JSON
+# รับ ingress ที่ต้องการจาก argument เช่น nginx, traefik, all
+VALID_INGRESS = ['nginx', 'traefik', 'haproxy', 'apisix']
+arg = sys.argv[1] if len(sys.argv) > 1 else 'all'
+IMPLEMENTATIONS = VALID_INGRESS if arg == 'all' else [arg]
+
+if not set(IMPLEMENTATIONS).issubset(set(VALID_INGRESS)):
+    print(f"❌ Invalid ingress: {arg}")
+    sys.exit(1)
+
+# metric ที่ใช้เป็น latency ได้
+LATENCY_METRICS = ['http_req_duration', 'static_latency']
+
 for impl in IMPLEMENTATIONS:
     json_dir = os.path.join(RESULT_DIR, impl, 'json')
     csv_dir = os.path.join(RESULT_DIR, impl, 'csv')
     os.makedirs(csv_dir, exist_ok=True)
+
+    print(f"📁 Processing ingress: {impl}")
 
     for fname in os.listdir(json_dir):
         if not fname.endswith('.json'):
@@ -24,31 +36,51 @@ for impl in IMPLEMENTATIONS:
         outname = fname.replace('_json.json', '_csv.csv')
         outpath = os.path.join(csv_dir, outname)
 
-        with open(filepath) as f:
-            lines = [json.loads(line) for line in f if line.strip()]
-
         latency_data = defaultdict(list)
         error_count = defaultdict(int)
         request_count = defaultdict(int)
 
-        for point in lines:
-            if point.get('type') != 'Point':
-                continue
+        line_count = 0
 
-            metric = point.get('metric')
-            time_str = point['data']['time']
-            dt = datetime.fromisoformat(time_str.split('+')[0])
-            bucket = int(dt.timestamp() // 5) * 5
+        try:
+            with open(filepath) as f:
+                for line in f:
+                    if not line.strip():
+                        continue
+                    try:
+                        point = json.loads(line)
+                        line_count += 1
+                    except Exception:
+                        print(f"⚠️  Skipped invalid JSON in {fname}")
+                        continue
 
-            if metric == 'http_req_duration':
-                latency_data[bucket].append(point['data']['value'])
+                    if point.get('type') != 'Point':
+                        continue
 
-            if metric == 'errors':
-                if point['data']['value'] > 0:
-                    error_count[bucket] += 1
+                    metric = point.get('metric')
+                    try:
+                        time_str = point['data']['time']
+                        dt = datetime.fromisoformat(time_str.split('+')[0])
+                        bucket = int(dt.timestamp() // 5) * 5
+                    except Exception:
+                        continue
 
-            if metric == 'http_reqs':
-                request_count[bucket] += point['data']['value']
+                    if metric in LATENCY_METRICS:
+                        latency_data[bucket].append(point['data']['value'])
+
+                    if metric == 'errors':
+                        if point['data']['value'] > 0:
+                            error_count[bucket] += 1
+
+                    if metric == 'http_reqs':
+                        request_count[bucket] += point['data']['value']
+        except FileNotFoundError:
+            print(f"❌ File not found: {filepath}")
+            continue
+
+        if not latency_data:
+            print(f"⚠️  No latency data found in {fname}")
+            continue
 
         with open(outpath, 'w', newline='') as out:
             writer = csv.DictWriter(out, fieldnames=[
@@ -71,4 +103,5 @@ for impl in IMPLEMENTATIONS:
                     'error_rate': round(error_rate, 2),
                 })
 
-        print(f"Generated: {outpath}")
+        print(f"✅ Generated: {outpath} ({line_count} lines)")
+
