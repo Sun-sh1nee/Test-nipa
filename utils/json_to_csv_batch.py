@@ -90,15 +90,16 @@ for impl in IMPLEMENTATIONS:
                 rps = request_count.get(bucket, 0) / 5
                 total_reqs = request_count.get(bucket, 0)
                 error_avg = error_sum.get(bucket, 0)
-                error_rate = (error_avg * 100) if total_reqs else 0
+                
+                # ✅ แก้ไขการคำนวณ error rate ให้ถูกต้อง (0-100%)
+                error_rate = round((error_avg / total_reqs * 100) if total_reqs > 0 else 0.0, 2)
 
                 writer.writerow({
                     'time_bucket_sec': datetime.fromtimestamp(bucket).isoformat(),
                     'avg_latency_ms': round(sum(data) / len(data), 2),
                     'p99_latency_ms': round(quantiles(data, n=100)[98], 2) if len(data) >= 2 else data[0],
                     'rps': round(rps, 2),
-                    'error_rate': round(error_rate, 2),
+                    'error_rate': error_rate,
                 })
 
         print(f"✅ Generated: {outpath} ({line_count} lines)")
-
